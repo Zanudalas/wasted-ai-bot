@@ -1,0 +1,18 @@
+{
+  "name": "wasted-ai-video-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Discord bot that generates AI videos with Seedance 2.5 and Gemini Omni Flash",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/index.js",
+    "dev": "node --env-file-if-exists=.env --watch src/index.js",
+    "test": "node test/smoke.mjs && node test/commands.mjs"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3"
+  }
+}
