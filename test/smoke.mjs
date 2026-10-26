@@ -53,6 +53,7 @@ function mockVideoDownload(url) {
 config.falKey = 'test-key';
 config.kieKey = '';
 config.pollIntervalMs = 5;
+config.watermarkEnabled = false; // covered separately in test/watermark.mjs
 
 let falPolls = 0;
 globalThis.fetch = async (url, options = {}) => {
@@ -110,7 +111,9 @@ assert.ok(falInteraction.calls.deferred, 'interaction must be deferred');
 const falFinal = falInteraction.calls.edits.at(-1);
 assert.ok(falFinal.files?.length === 1, 'final reply must attach the video file');
 assert.match(falFinal.embeds[0].title, /готово/i);
-console.log('ok  /generate_seedance happy path (video attached)');
+assert.equal(falFinal.content, '<@user_1>', 'final reply must mention the requester');
+assert.deepEqual(falFinal.allowedMentions.users, ['user_1'], 'mention must be allowed');
+console.log('ok  /generate_seedance happy path (video attached, author mentioned)');
 
 config.falKey = '';
 const noKeyInteraction = fakeInteraction();
@@ -201,6 +204,7 @@ await runGeneration(kieInteraction, {
 const kieFinal = kieInteraction.calls.edits.at(-1);
 assert.ok(kieFinal.files?.length === 1, 'kie.ai flow must attach the video file');
 assert.match(kieFinal.embeds[0].title, /готово/i);
+assert.equal(kieFinal.content, '<@user_1>', 'kie.ai flow must mention the requester');
 console.log('ok  /generate_omni happy path on kie.ai');
 
 // Insufficient credits: HTTP 200 with code 402.

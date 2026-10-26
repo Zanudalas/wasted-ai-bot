@@ -20,6 +20,12 @@ export const config = {
   generationTimeoutMs: num(process.env.GENERATION_TIMEOUT_MS, 12 * 60 * 1000),
   maxUploadMb: num(process.env.MAX_UPLOAD_MB, 50),
   progressUpdateMs: num(process.env.PROGRESS_UPDATE_MS, 6000),
+
+  // Watermark (burned into the video with ffmpeg)
+  watermarkEnabled: (process.env.WATERMARK ?? '1').trim() !== '0',
+  watermarkPath: (process.env.WATERMARK_PATH ?? 'assets/watermark.png').trim() || 'assets/watermark.png',
+  watermarkScale: num(process.env.WATERMARK_SCALE, 0.16),
+  watermarkOpacity: Math.min(1, num(process.env.WATERMARK_OPACITY, 0.85)),
 };
 
 /** Video models available to the bot. */

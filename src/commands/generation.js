@@ -5,10 +5,12 @@ import {
   ButtonStyle,
   MessageFlags,
 } from 'discord.js';
+import fs from 'node:fs/promises';
 import { BRAND_COLOR, ERROR_COLOR, OK_COLOR, config } from '../config.js';
 import { ProviderError, generate, hasKey, keyName, providerName } from '../providers/index.js';
 import { downloadVideo, removeFile } from '../utils/files.js';
 import { formatBytes, formatElapsed, truncate } from '../utils/format.js';
+import { applyWatermark, watermarkReady } from '../utils/watermark.js';
 
 const cooldowns = new Map();
 
@@ -164,6 +166,7 @@ export async function runGeneration(interaction, { model, params, prompt }) {
 
     const limitMb = uploadLimitMb(interaction);
     const maxBytes = limitMb * 1024 * 1024;
+    const mention = `<@${interaction.user.id}>`;
     let attachment = null;
     let note = null;
 
@@ -172,18 +175,44 @@ export async function runGeneration(interaction, { model, params, prompt }) {
       if (downloaded.tooLarge) {
         note = `Видео весит **${formatBytes(downloaded.size)}** — больше лимита загрузки в этот канал (${limitMb} МБ), поэтому прикреплена ссылка.`;
       } else {
-        tempFile = downloaded.path;
-        attachment = new AttachmentBuilder(downloaded.path, {
-          name: model.fileName,
-          description: `${model.label} — ${truncate(prompt, 120)}`,
-        });
+        let filePath = downloaded.path;
+        tempFile = filePath;
+
+        if (watermarkReady()) {
+          try {
+            const stamped = await applyWatermark(filePath);
+            await removeFile(filePath);
+            filePath = stamped;
+            tempFile = stamped;
+          } catch (watermarkError) {
+            console.error('[watermark]', watermarkError);
+            note = 'Водяной знак не наложился, видео отправлено без него.';
+          }
+        }
+
+        const size = (await fs.stat(filePath)).size;
+        if (size > maxBytes) {
+          note = `Видео весит **${formatBytes(size)}** — больше лимита загрузки в этот канал (${limitMb} МБ), поэтому прикреплена ссылка.`;
+          await removeFile(filePath);
+          tempFile = null;
+        } else {
+          attachment = new AttachmentBuilder(filePath, {
+            name: model.fileName,
+            description: `${model.label} — ${truncate(prompt, 120)}`,
+          });
+        }
       }
     } catch (downloadError) {
       note = `Не удалось прикрепить файл (${downloadError.message}), но видео доступно по кнопке ниже.`;
     }
 
     const { embed, row } = resultEmbed({ model, prompt, elapsedMs, videoUrl, note });
-    const payload = { embeds: [embed], components: [row] };
+    const payload = {
+      content: mention,
+      embeds: [embed],
+      components: [row],
+      allowedMentions: { users: [interaction.user.id], repliedUser: false },
+    };
     if (attachment) payload.files = [attachment];
 
     try {
@@ -192,6 +221,7 @@ export async function runGeneration(interaction, { model, params, prompt }) {
       // 40005 = "Request entity too large" — fall back to a link-only message.
       if (sendError?.code === 40005 || sendError?.status === 413) {
         await interaction.editReply({
+          content: mention,
           embeds: [
             resultEmbed({
               model,
@@ -202,6 +232,7 @@ export async function runGeneration(interaction, { model, params, prompt }) {
             }).embed,
           ],
           components: [row],
+          allowedMentions: { users: [interaction.user.id], repliedUser: false },
         });
       } else {
         throw sendError;
